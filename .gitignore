@@ -1,0 +1,14 @@
+.vagrant/
+*.log
+*.pcap
+*.pcapng
+*.db
+*.sqlite
+*.rdb
+__pycache__/
+.env
+*.key
+*.pem
+*.tar
+*.tar.gz
+*.zip
