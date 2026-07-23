@@ -1,3 +1,4 @@
+# Vagrant files
 .vagrant/
 *.log
 *.pcap
@@ -12,3 +13,33 @@ __pycache__/
 *.tar
 *.tar.gz
 *.zip
+
+# Generated packet captures
+captures/*
+!captures/.gitkeep
+
+# Extracted/generated telemetry and telecommand outputs
+extracted_tm/
+extracted_tc/
+extracted_*/
+**/extracted_*/
+
+# Packet capture files
+*.pcap
+*.pcapng
+*.cap
+
+# Generated binary payloads
+*.bin
+
+# Large local archives
+nos3-components.tar.gz
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local virtual environments
+venv/
+.venv/
+yamcs-venv/
