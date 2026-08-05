@@ -1,7 +1,7 @@
 Vagrant.configure("2") do |config|
 
   DEBIAN_BOX = "debian/bookworm64"
-  NOS3_BOX   = "ubuntu/jammy64"
+  SAT_BOX   = "ubuntu/jammy64"
   KALI_BOX   = "kalilinux/rolling"
 
   MC_LAN    = "MC-LAN"
@@ -10,7 +10,7 @@ Vagrant.configure("2") do |config|
   MC_IP       = "192.168.10.20"
   GS_MC_IP    = "192.168.10.30"
   KALI_IP     = "192.168.10.40"
-  NOS3_IP     = "192.168.20.10"
+  SAT_IP     = "192.168.20.10"
   GS_SPACE_IP = "192.168.20.30"
 
   # Keep the default NAT interface for apt/git/internet access.
@@ -22,7 +22,7 @@ Vagrant.configure("2") do |config|
   #   Kali 192.168.10.40
   #
   # SPACE-LAN:
-  #   NOS3 192.168.20.10
+  #   SAT 192.168.20.10
   #   GS   192.168.20.30
 
   # -------------------------
@@ -34,8 +34,8 @@ Vagrant.configure("2") do |config|
     DEFAULT_IFACE="$(ip route show default 2>/dev/null | awk '{print $5; exit}')"
 
     if command -v resolvectl >/dev/null 2>&1 && [ -n "$DEFAULT_IFACE" ]; then
-      resolvectl set-dns "$DEFAULT_IFACE" 8.8.8.8 1.1.1.1
-      resolvectl set-domain "$DEFAULT_IFACE" ~.
+      resolvectl dns "$DEFAULT_IFACE" 8.8.8.8 1.1.1.1
+      resolvectl domain "$DEFAULT_IFACE" ~.
 
       if ! getent hosts deb.debian.org >/dev/null 2>&1 && \
          ! getent hosts archive.ubuntu.com >/dev/null 2>&1 && \
@@ -77,6 +77,7 @@ EOF
     apt-get install -y \
       curl \
       ca-certificates \
+      procps \
       gnupg \
       git \
       jq \
@@ -107,31 +108,31 @@ EOF
       if [ ! -d "$dest/.git" ]; then
         sudo -u vagrant -H git clone $branch_opt "$repo" "$dest"
       else
-        echo "[+] Repository already exists at $dest, skipping clone/pull"
+        echo "Repository already exists at $dest, skipping clone/pull"
       fi
     }
   SHELL
 
   # =========================
-  # NOS3 / SAT VM
+  # SAT VM
   # =========================
-  config.vm.define "nos3" do |nos3|
-    nos3.vm.box = NOS3_BOX
-    nos3.vm.hostname = "nos3-vm"
+  config.vm.define "sat" do |sat|
+    sat.vm.box = SAT_BOX
+    sat.vm.hostname = "sat-vm"
 
-    nos3.vm.network "private_network",
-      ip: NOS3_IP,
+    sat.vm.network "private_network",
+      ip: SAT_IP,
       netmask: "255.255.255.0",
       virtualbox__intnet: SPACE_LAN
 
-    nos3.vm.provider "virtualbox" do |vb|
-      vb.name = "nos3-vm"
+    sat.vm.provider "virtualbox" do |vb|
+      vb.name = "sat-vm"
       vb.memory = 8192
       vb.cpus = 4
     end
 
     # Network and DNS applied at every boot
-    nos3.vm.provision "shell", run: "always", privileged: true, inline: <<-SHELL
+    sat.vm.provision "shell", run: "always", privileged: true, inline: <<-SHELL
       set -e
 
       #{DNS_FIX}
@@ -147,14 +148,14 @@ EOF
 
       ip route replace 192.168.10.0/24 via #{GS_SPACE_IP}
 
-      echo "[+] NOS3 routing table"
+      echo "Sat routing table"
       ip route
-      echo "[+] NOS3 addresses"
+      echo "Sat addresses"
       ip -br addr
     SHELL
 
-    # NOS3 installation applied when the VM is first created
-    nos3.vm.provision "shell", privileged: true, inline: <<-SHELL
+    # Sat installation applied when the VM is first created
+    sat.vm.provision "shell", privileged: true, inline: <<-SHELL
       set -e
       export DEBIAN_FRONTEND=noninteractive
 
@@ -193,7 +194,7 @@ EOF
 
       usermod -aG docker vagrant
 
-      # Prevent Docker JSON logs from filling the disk during NOS3 runs
+      # Prevent Docker JSON logs from filling the disk during sat runs
       mkdir -p /etc/docker
       cat > /etc/docker/daemon.json <<'EOF'
 {
@@ -208,7 +209,7 @@ EOF
       systemctl restart docker || true
 
       git_clone_as_vagrant \
-        "https://github.com/nasa/nos3.git" \
+        "https://github.com/BaptisteBemel/nos34yamcs_cli" \
         "/home/vagrant/nos3"
 
       cd /home/vagrant/nos3
@@ -216,6 +217,14 @@ EOF
 
       chown -R vagrant:vagrant /home/vagrant/nos3
     SHELL
+
+    sat.vm.provision "shell",
+      privileged: true,
+      path: "provision/sat/build_sat.sh"
+
+    sat.vm.provision "shell",
+      privileged: true,
+      path: "provision/sat/install_sat_service.sh"
   end
 
   # =========================
@@ -254,9 +263,9 @@ EOF
       sysctl -p /etc/sysctl.d/99-satlab-forwarding.conf || true
       sysctl -w net.ipv4.ip_forward=1
 
-      echo "[+] GS routing table"
+      echo "GS routing table"
       ip route
-      echo "[+] GS addresses"
+      echo "GS addresses"
       ip -br addr
     SHELL
 
@@ -309,9 +318,9 @@ EOF
 
       ip route replace 192.168.20.0/24 via #{GS_MC_IP}
 
-      echo "[+] MC routing table"
+      echo "MC routing table"
       ip route
-      echo "[+] MC addresses"
+      echo "MC addresses"
       ip -br addr
     SHELL
 
@@ -338,11 +347,9 @@ EOF
       apt-get install -y nodejs
 
       # Clone the patched NOS3-compatible Yamcs branch.
-      # This should point to your fork that contains the UdpTmFrameLink / NOS3 config fixes.
       git_clone_as_vagrant \
         "https://github.com/BaptisteBemel/yamcs4nos3.git" \
-        "/home/vagrant/yamcs-nos3" \
-        "nos3-dev"
+        "/home/vagrant/yamcs-nos3"
 
       mkdir -p /storage/yamcs-data
       chown -R vagrant:vagrant /storage/yamcs-data
@@ -354,24 +361,15 @@ EOF
         sudo -u vagrant -H mvn clean install -DskipTests
         sudo -u vagrant -H touch /home/vagrant/yamcs-nos3/.vagrant_maven_build_done
       else
-        echo "[+] Yamcs backend already built, skipping Maven build"
-      fi
-
-      # Build Yamcs frontend if the repo contains a UI directory
-      if [ -d /home/vagrant/yamcs-nos3/ui ]; then
-        if [ ! -d /home/vagrant/yamcs-nos3/ui/node_modules ]; then
-          cd /home/vagrant/yamcs-nos3/ui
-          sudo -u vagrant -H npm install
-          sudo -u vagrant -H npm run build
-        else
-          echo "[+] Yamcs frontend dependencies already installed, skipping npm install"
-        fi
-      else
-        echo "[+] No Yamcs UI directory found, skipping frontend build"
+        echo "Yamcs backend already built, skipping Maven build"
       fi
 
       chown -R vagrant:vagrant /home/vagrant/yamcs-nos3
     SHELL
+
+    mc.vm.provision "shell",
+      privileged: true,
+      path: "provision/mc/install_yamcs_service.sh"
   end
 
   # =========================
@@ -409,9 +407,9 @@ EOF
 
       ip route replace 192.168.20.0/24 via #{GS_MC_IP}
 
-      echo "[+] Kali routing table"
+      echo "Kali routing table"
       ip route
-      echo "[+] Kali addresses"
+      echo "Kali addresses"
       ip -br addr
     SHELL
 
@@ -429,6 +427,45 @@ EOF
         nmap \
         netcat-openbsd
     SHELL
-  end
 
+
+      # Persist Kali lab network with NetworkManager.
+  # Direct "ip addr add" works manually, but Kali/NetworkManager may remove it
+  # during boot/provisioning. This creates a persistent NM profile for eth1.
+  kali.vm.provision "shell", run: "always", privileged: true, inline: <<-SHELL
+    set -e
+
+    echo "Persisting Kali lab network on eth1"
+
+    if command -v nmcli >/dev/null 2>&1; then
+      nmcli connection delete satlab-eth1 >/dev/null 2>&1 || true
+
+      nmcli connection add \
+        type ethernet \
+        ifname eth1 \
+        con-name satlab-eth1 \
+        ipv4.method manual \
+        ipv4.addresses 192.168.10.40/24 \
+        ipv4.never-default yes \
+        ipv6.method ignore \
+        connection.autoconnect yes
+
+      nmcli connection modify satlab-eth1 \
+        +ipv4.routes "192.168.20.0/24 192.168.10.30"
+
+      nmcli connection up satlab-eth1
+    else
+      ip link set eth1 up
+      ip addr flush dev eth1
+      ip addr add 192.168.10.40/24 dev eth1
+      ip route replace 192.168.20.0/24 via 192.168.10.30 dev eth1
+    fi
+
+    echo "Final Kali addresses"
+    ip -br addr
+
+    echo "Final Kali routing table"
+    ip route
+  SHELL
+  end
 end
