@@ -13,6 +13,12 @@ Vagrant.configure("2") do |config|
   SAT_IP     = "192.168.20.10"
   GS_SPACE_IP = "192.168.20.30"
 
+  MC_MAC       = "080027C6214C"
+  GS_MC_MAC    = "080027CB87AD"
+  KALI_MAC     = "0800273452CF"
+  SAT_MAC      = "0800276F217F"
+  GS_SPACE_MAC = "080027F963DD"
+
   # Keep the default NAT interface for apt/git/internet access.
   # Lab traffic uses VirtualBox internal networks:
   #
@@ -123,7 +129,8 @@ EOF
     sat.vm.network "private_network",
       ip: SAT_IP,
       netmask: "255.255.255.0",
-      virtualbox__intnet: SPACE_LAN
+      virtualbox__intnet: SPACE_LAN,
+      mac: SAT_MAC
 
     sat.vm.provider "virtualbox" do |vb|
       vb.name = "sat-vm"
@@ -237,12 +244,14 @@ EOF
     gs.vm.network "private_network",
       ip: GS_MC_IP,
       netmask: "255.255.255.0",
-      virtualbox__intnet: MC_LAN
+      virtualbox__intnet: MC_LAN,
+      mac: GS_MC_MAC
 
     gs.vm.network "private_network",
       ip: GS_SPACE_IP,
       netmask: "255.255.255.0",
-      virtualbox__intnet: SPACE_LAN
+      virtualbox__intnet: SPACE_LAN,
+      mac: GS_SPACE_MAC
 
     gs.vm.provider "virtualbox" do |vb|
       vb.name = "gs-vm"
@@ -288,7 +297,8 @@ EOF
     mc.vm.network "private_network",
       ip: MC_IP,
       netmask: "255.255.255.0",
-      virtualbox__intnet: MC_LAN
+      virtualbox__intnet: MC_LAN,
+      mac: MC_MAC
 
     mc.vm.network "forwarded_port",
       guest: 8090,
@@ -382,7 +392,8 @@ EOF
     kali.vm.network "private_network",
       ip: KALI_IP,
       netmask: "255.255.255.0",
-      virtualbox__intnet: MC_LAN
+      virtualbox__intnet: MC_LAN,
+      mac: KALI_MAC 
 
     kali.vm.provider "virtualbox" do |vb|
       vb.name = "kali-vm"
