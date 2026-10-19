@@ -344,6 +344,7 @@ EOF
 
       apt-get install -y \
         openjdk-17-jdk \
+        python3-scapy \
         maven \
         build-essential \
         unzip \
