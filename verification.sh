@@ -86,17 +86,11 @@ vagrant ssh mc -c '
 curl -fsS -X POST \
 "http://127.0.0.1:8090/api/processors/nos3/realtime/commands//CFS/CMD/CF_NOOP" \
 -H "Content-Type: application/json" \
--d '\''{
-  "args": {
-    "DEST_IP": "radio-sim",
-    "DEST_PORT": 5011
-  }
-}'\'' >/dev/null
+-d '\''{"args":{}}'\'' >/dev/null
 '
 
-wait "$TCPDUMP_PID"
 
-if grep -q "8010" "$TC_OUTPUT"; then
+if wait "$TCPDUMP_PID"; then
     echo "TC -> SAT ............. $PASS"
 else
     echo "TC -> SAT ............. $FAIL"
