@@ -1,0 +1,18 @@
+diff --git a/fsw/src/services/tm_sdlp.c b/fsw/src/services/tm_sdlp.c
+--- a/fsw/src/services/tm_sdlp.c
++++ b/fsw/src/services/tm_sdlp.c
+@@ -104,10 +104,14 @@
+     uint16 dataFieldOffset;
+     uint16 secHdrLength;
+     uint16 gvcid = 0;
++#ifndef LAB_CLEAR_MODE
+     uint8  sdlsSecurityHeaderLength = 0;
+     uint8  sdlsSecurityTrailerLength = 0;
++#endif /* LAB_CLEAR_MODE */
+     char mutName[OS_MAX_API_NAME];
++#ifndef LAB_CLEAR_MODE
+     SecurityAssociation_t* sa_ptr = NULL;
++#endif /* LAB_CLEAR_MODE */
+ 
+     if (pGlobalConfig == NULL || pChannelConfig == NULL || pFrameInfo == NULL ||
+         pOverflowBuffer == NULL || pTfBuffer == NULL)

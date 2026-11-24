@@ -1,107 +1,55 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
-PASS="[PASS]"
-FAIL="[FAIL]"
+include_kali=true
+case "${1:-}" in
+    "") ;;
+    --baseline) include_kali=false ;;
+    *) echo "Usage: bash verification.sh [--baseline]" >&2; exit 2 ;;
+esac
+if (( $# > 1 )); then
+    echo "Usage: bash verification.sh [--baseline]" >&2
+    exit 2
+fi
 
 check() {
-    local name="$1"
+    local name=$1
     shift
-
-    echo -n "$name ... "
-
-    if "$@" >/dev/null 2>&1; then
-        echo "$PASS"
+    if "$@"; then
+        printf '[PASS] %s\n' "$name"
     else
-        echo "$FAIL"
+        printf '[FAIL] %s\n' "$name" >&2
         exit 1
     fi
 }
 
-echo "========== Connectivity =========="
+check "MC to SAT" vagrant ssh mc -c 'ping -c 2 -W 2 192.168.20.10'
+check "SAT to MC" vagrant ssh sat -c 'ping -c 2 -W 2 192.168.10.20'
+if "$include_kali"; then
+    check "Kali to SAT" vagrant ssh kali -c 'ping -c 2 -W 2 192.168.20.10'
+fi
+check "Yamcs instance API" curl -fsS --max-time 10 -o /dev/null \
+    'http://127.0.0.1:8090/api/instances/nos3'
 
-check "MC -> SAT" \
-    vagrant ssh mc -c "ping -c 2 192.168.20.10"
+check "Radio telemetry arrives on MC" vagrant ssh mc -c \
+    "sudo -n timeout 12 tcpdump -nn -i any -c 5 'src host 192.168.20.10 and udp dst port 6011'"
 
-check "SAT -> MC" \
-    vagrant ssh sat -c "ping -c 2 192.168.10.20"
-
-check "KALI -> SAT" \
-    vagrant ssh kali -c "ping -c 2 192.168.20.10"
-
-echo
-echo "========== YAMCS =========="
-
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8090/)
-
-if [[ "$HTTP_CODE" == "200" ]]; then
-    echo "YAMCS HTTP ............ $PASS"
-else
-    echo "YAMCS HTTP ............ $FAIL (HTTP $HTTP_CODE)"
+# Docker uses the SAT clock. Yamcs can timestamp the submission in mission time.
+since=$(vagrant ssh sat -c 'date -u +%Y-%m-%dT%H:%M:%S.%NZ' | tr -d '\r')
+if [[ ! "$since" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{9}Z$ ]]; then
+    echo "Could not read the SAT clock." >&2
     exit 1
 fi
+check "CF_NOOP submitted" vagrant ssh mc -c \
+    "curl -fsS --max-time 10 -o /dev/null -H 'Content-Type: application/json' \
+    -d '{\"args\":{}}' http://127.0.0.1:8090/api/processors/nos3/realtime/commands//CFS/CMD/CF_NOOP"
 
-echo
-echo "========== Telemetry =========="
-
-TM_OUTPUT=$(mktemp)
-
-if vagrant ssh mc -c \
-    "sudo timeout 10 tcpdump -ni any 'udp dst port 6011' -c 5" \
-    >"$TM_OUTPUT" 2>&1; then
-
-    if grep -q "192.168.20.10.*6011" "$TM_OUTPUT"; then
-        echo "TM -> YAMCS ........... $PASS"
-    else
-        echo "TM -> YAMCS ........... $FAIL"
-        cat "$TM_OUTPUT"
-        rm -f "$TM_OUTPUT"
-        exit 1
-    fi
-else
-    echo "TM -> YAMCS ........... $FAIL (timeout)"
-    cat "$TM_OUTPUT"
-    rm -f "$TM_OUTPUT"
-    exit 1
-fi
-
-rm -f "$TM_OUTPUT"
-
-echo
-echo "========== Telecommand =========="
-
-TC_OUTPUT=$(mktemp)
-
-vagrant ssh sat -c \
-    "sudo timeout 10 tcpdump -ni any 'udp dst port 8010' -c 1" \
-    >"$TC_OUTPUT" 2>&1 &
-TCPDUMP_PID=$!
-
-sleep 1
-
-echo "Sending CF_NOOP..."
-
-vagrant ssh mc -c '
-curl -fsS -X POST \
-"http://127.0.0.1:8090/api/processors/nos3/realtime/commands//CFS/CMD/CF_NOOP" \
--H "Content-Type: application/json" \
--d '\''{"args":{}}'\'' >/dev/null
-'
-
-
-if wait "$TCPDUMP_PID"; then
-    echo "TC -> SAT ............. $PASS"
-else
-    echo "TC -> SAT ............. $FAIL"
-    cat "$TC_OUTPUT"
-    rm -f "$TC_OUTPUT"
-    exit 1
-fi
-
-rm -f "$TC_OUTPUT"
-
-echo
-echo "================================="
-echo "All checks passed."
-echo "================================="
+check "CF_NOOP received onboard" vagrant ssh sat -c "
+    for attempt in {1..10}; do
+        if docker logs --timestamps --since '$since' sc_1_nos_fsw 2>&1 |
+            grep -F 'CF: No-Op received'; then
+            exit 0
+        fi
+        sleep 1
+    done
+    exit 1"

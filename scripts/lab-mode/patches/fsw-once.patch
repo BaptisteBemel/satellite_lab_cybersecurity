@@ -1,0 +1,15 @@
+diff --git a/scripts/fsw/fsw_respawn.sh b/scripts/fsw/fsw_respawn.sh
+--- a/scripts/fsw/fsw_respawn.sh
++++ b/scripts/fsw/fsw_respawn.sh
+@@ -9,6 +9,11 @@
+ #echo "fsw_respawn.sh script"
+ 
+ cd $FSW_DIR
++
++# Runtime mode sessions run once; a new FSW start requires a prepared session.
++if [ -f /home/vagrant/sdls-secrets/lab-mode-fsw-once ]; then
++    exec "$FSW_DIR/core-cpu1" -R PO
++fi
+ 
+ while [ 1 ]
+ do

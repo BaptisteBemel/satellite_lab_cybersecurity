@@ -1,0 +1,55 @@
+diff --git a/nos3/src/main/yamcs/etc/yamcs.nos3.yaml b/nos3/src/main/yamcs/etc/yamcs.nos3.yaml
+index fa6d0efd9..722deadbb 100644
+--- a/nos3/src/main/yamcs/etc/yamcs.nos3.yaml
++++ b/nos3/src/main/yamcs/etc/yamcs.nos3.yaml
+@@ -78,8 +78,18 @@ dataLinks:
+     initialBytesToStrip: 4
+     frameLength: 1786
+     errorDetection: NONE
++    # Receive authenticated and encrypted telemetry using the session TM key.
++    encryption:
++      - spi: 5
++        class: org.yamcs.security.sdls.SecurityAssociationAes256Gcm128Factory
++        args:
++          keyFile: /home/vagrant/sdls-secrets/current/tm.key
++          verifySeqNum: true
++          # Temporarily allow the receiver to catch up with the live TM counter.
++          seqNumWindow: 10000
+     virtualChannels:
+       - vcId: 1
++        encryptionSpis: [5]
+         service: "PACKET"
+         maxPacketLength: 2048
+         packetPreprocessorClassName: org.yamcs.tctm.cfs.CfsPacketPreprocessor
+@@ -102,8 +112,16 @@ dataLinks:
+     spacecraftId: 3
+     maxFrameLength: 1024
+     errorDetection: NONE
++    # Encryption parameters for TC SDLS.
++    encryption:
++      - spi: 4
++        class: org.yamcs.security.sdls.SecurityAssociationAes256Gcm128Factory
++        args:
++          keyFile: /home/vagrant/sdls-secrets/current/tc.key
++          initialSeqNum: "000000000000000000000001"
+     virtualChannels:
+       - vcId: 0
++        encryptionSpi: 4
+         service: PACKET
+         mapId: 1
+         multiplePacketsPerFrame: false
+diff --git a/yamcs-core/src/main/java/org/yamcs/security/sdls/SdlsMemento.java b/yamcs-core/src/main/java/org/yamcs/security/sdls/SdlsMemento.java
+index 7743b39f1..1b0342af6 100644
+--- a/yamcs-core/src/main/java/org/yamcs/security/sdls/SdlsMemento.java
++++ b/yamcs-core/src/main/java/org/yamcs/security/sdls/SdlsMemento.java
+@@ -76,6 +76,7 @@ public class SdlsMemento {
+         if (linkSpiToSeqNum == null) {
+             return new HashSet<>();
+         }
+-        return linkSpiToSeqNum.keySet();
++        // Return a copy so startup cleanup cannot remove configured counters.
++        return new HashSet<>(linkSpiToSeqNum.keySet());
+     }
+-}
+\ No newline at end of file
++}

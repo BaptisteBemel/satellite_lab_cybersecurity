@@ -1,0 +1,76 @@
+diff --git a/src/core/crypto_config.c b/src/core/crypto_config.c
+index 89d53ed..f03168a 100644
+--- a/src/core/crypto_config.c
++++ b/src/core/crypto_config.c
+@@ -113,11 +113,33 @@ int32_t Crypto_SC_Init(void)
+     sa_ptr->abm_len        = ABM_SIZE;
+     sa_ptr->shivf_len      = 0;
+     sa_ptr->iv_len         = 0;
++
++    /* SDLS profile: authenticated and encrypted TM on the existing VC 1. */
+     sa_if->sa_get_from_spi(5, &sa_ptr);
+     sa_ptr->sa_state       = SA_OPERATIONAL;
++    sa_ptr->ecs_len        = 1;
++    sa_ptr->ecs            = CRYPTO_CIPHER_AES256_GCM;
++    sa_ptr->est            = 1;
++    sa_ptr->ast            = 1;
++
++    /* Use the independently generated TM key in native key slot 9. */
++    sa_ptr->ekid           = 9;
++    sa_ptr->akid           = 9;
++
++    /* Match the Yamcs format: 12-byte IV, no separate ARSN, 16-byte tag. */
++    sa_ptr->shivf_len      = 12;
++    sa_ptr->iv_len         = 12;
+     sa_ptr->shsnf_len      = 0;
+     sa_ptr->arsn_len       = 0;
++    sa_ptr->stmacf_len     = 16;
+     sa_ptr->gvcid_blk.vcid = 1;
++
++    /* Match the default Yamcs TM authentication mask without a secondary header. */
++    sa_ptr->abm_len        = ABM_SIZE;
++    sa_ptr->abm[1]         = 0x0E; /* Virtual Channel ID bits. */
++    sa_ptr->abm[6]         = 0xFF; /* SPI, most significant byte. */
++    sa_ptr->abm[7]         = 0xFF; /* SPI, least significant byte. */
++
+     sa_if->sa_get_from_spi(6, &sa_ptr);
+     sa_ptr->sa_state       = SA_OPERATIONAL;
+     sa_ptr->ecs            = CRYPTO_CIPHER_AES256_GCM;
+diff --git a/src/sa/internal/sa_interface_inmemory.template.c b/src/sa/internal/sa_interface_inmemory.template.c
+index e2fb851..e8604d9 100644
+--- a/src/sa/internal/sa_interface_inmemory.template.c
++++ b/src/sa/internal/sa_interface_inmemory.template.c
+@@ -326,12 +326,12 @@ int32_t sa_populate(void)
+     sa[3].gvcid_blk.vcid  = 0;
+     sa[3].gvcid_blk.mapid = TYPE_TC;
+ 
+-    // TC - Authenticated Encryption - AES-GCM-256 (Keyed)
++    // TC - Authenticated Encryption - AES-GCM-256 (Operational)
+     // IV = 0 ... 0, IV-Len = 12, MAC-Len = 16, TFVN = 0, VCID = 0, ARSNW = 5
+     // EKID = 4
+     sa[4].spi             = 4;
+     sa[4].ekid            = 4;
+-    sa[4].sa_state        = SA_KEYED;
++    sa[4].sa_state        = SA_OPERATIONAL;
+     sa[4].ecs_len         = 1;
+     sa[4].ecs             = CRYPTO_CIPHER_AES256_GCM;
+     sa[4].est             = 1;
+@@ -339,9 +339,17 @@ int32_t sa_populate(void)
+     sa[4].shivf_len       = 12;
+     sa[4].iv_len          = 12;
+     sa[4].abm_len         = ABM_SIZE;
++    /* Match the default Yamcs authentication mask for TC with a segment header.
++    * All other mask bytes are initialized to zero by the native SA initializer.
++    */
++    sa[4].abm[2] = 0xFC; /* Virtual Channel ID bits. */
++    sa[4].abm[5] = 0xFF; /* Segment header. */
++    sa[4].abm[6] = 0xFF; /* SPI, most significant byte. */
++    sa[4].abm[7] = 0xFF; /* SPI, least significant byte. */
+     sa[4].arsnw_len       = 1;
+     sa[4].arsnw           = 5;
+-    sa[4].arsn_len        = ((sa[4].arsnw * 2) + 1);
++    //YAMCS uses the 12-byte IV as its counter, without a separate ARSN.
++    sa[4].arsn_len        = 0;
+     sa[4].stmacf_len      = 16;
+     sa[4].gvcid_blk.tfvn  = 0;
+     sa[4].gvcid_blk.scid  = SCID & 0x3FF;

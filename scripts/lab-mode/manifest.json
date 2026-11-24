@@ -1,0 +1,75 @@
+{
+  "version": 3,
+  "nos3_revision": "fe83a01e12d54195a586a056cac4e0bd9dea298b",
+  "yamcs_revision": "a76ba24638829fbe0ea8f2e2717d1798dce4b53d",
+  "patches": [
+    {
+      "repo": "fsw/apps/to",
+      "revision": "a58818071217f9058abff47cbacf6bfcdbb8e36c",
+      "path": "fsw/examples/udp_tf/to_custom.c",
+      "patch": "to-clear.patch",
+      "base": "02c27981a7d91e3eaec340e5b685b170776c3bb33b5d92c3ba8600ee70e81ea8",
+      "patched": "9414a4474f974e90a3b06caa4d6e93fe7010912e39bb31ef5ea88fe109e9f5e3"
+    },
+    {
+      "repo": "fsw/apps/io_lib",
+      "revision": "b98953eea7b187cebf8028eb62824f306693c135",
+      "path": "fsw/src/services/tm_sdlp.c",
+      "patch": "io-clear.patch",
+      "base": "e7395bcbbb4d4cb05cfe393e8876b8bea7034c2cf4af334e9dc1c1086b9ed3c4",
+      "patched": "0d7c6b261b383cf505e4d7ddba205820b10644dd63c57b5eda271c23b3538eee",
+      "previous": {
+        "c6d6ceceb908ca4502bed7d686469e648b59364e528d53b2fbd04cb8bb862680": "io-clear-v1-fix.patch"
+      }
+    },
+    {
+      "repo": "components/cryptolib",
+      "revision": "309c1c4a57313044215ca730abfa3fbe9e5feed0",
+      "path": "src/core/crypto_tc.c",
+      "patch": "tc-strict.patch",
+      "base": "feb70ebd24e8852c65d833d2388bb919bd19e386c7a067c836ae3f7f02b64d46",
+      "patched": "f697025460ee1731ceef955955d96f1805be807458549c693f267c90ab128515"
+    },
+    {
+      "repo": ".",
+      "revision": "fe83a01e12d54195a586a056cac4e0bd9dea298b",
+      "path": "scripts/fsw/fsw_respawn.sh",
+      "patch": "fsw-once.patch",
+      "base": "604b80eb136452e8035a5f95a272c06e7c904ee21fac027c756647780365fcb3",
+      "patched": "41fc16d7bd18987d34146a220dd21000bec1cf558c6210a1b2c7a0db0b693f43"
+    }
+  ],
+  "initial_yaml": "6624ad37fb8b4e710d6728d12555aa95284f6e3b5a4e8432bd2d0e845e487e5a",
+  "initial_toolchains": [
+    "ec14854e066174a44aff73c5eefe0e52e77c195e3b2637288faacc8ceb5bbb95",
+    "ba36accc0602bf7d09277cbca394e107b54124e075bc1f25e8cc5ca6bb08cde8",
+    "e2035edfca9af8c6527c61db728b12f34d2837a1257bdf68294ebf62a9a8b6fa"
+  ],
+  "crypto_config": "00cc20e3de107e02bbf990eab8b05a7ddfeac8d4f4ee906584568e0aa9fb4262",
+  "crypto_sa": "ea28b932759d542dff0a6e67abf057a6989bcf9658970d9b8c67cbd111c672e9",
+  "key_template": "b7de981af267177d15092162fe8deb2edf14a73b86ce7851e34e9d5f3066e3c0",
+  "files": {
+    "scripts/lab-mode/patches/to-clear.patch": "c22e12087ad5e7aefe1bac7e372a0a45ea85708f5dc53c68b868447c834eca8e",
+    "scripts/lab-mode/patches/tc-strict.patch": "dee956e63e51a24d8d483d6c5f8b4bc97720a755cb1fee267f511fd9a6eb6373",
+    "scripts/lab-mode/patches/io-clear.patch": "43964d56df8d342a8ce178e738bf4e75034d0651705ec0bc6fc54dca21380742",
+    "scripts/lab-mode/patches/io-clear-v1-fix.patch": "8ac937d05ca9429b156c3d64fff8ea490f84f21b4a77b6d1b0a38641e0bfb072",
+    "scripts/lab-mode/patches/fsw-once.patch": "93cdb4bad3fff102881ae2cf40b3c34a8b6d9a9e619c8fe587f9aac4105e16f3",
+    "profiles/clear/yamcs.nos3.yaml": "e4f46990c4836d939b7a27d6683786c571c35e1d029d0fb341ac53a84b51bf55",
+    "profiles/clear/yamcs.bootstrap.yaml": "3ae14297a327c4bb0e0e988ab3fbe8689a88c754ebff1f32771f1e221013e85d",
+    "profiles/clear/toolchain-amd64-nos3.cmake": "13e23fd49aee89fb2b93d0cf544a7762d1d033efbc1c8e86f1f41aba48c2e194",
+    "profiles/sdls/yamcs.nos3.yaml": "cc4a4f034f2e474c10906ee31fe71f4b7884448f11e34f69c2e8d14d6c176005",
+    "profiles/sdls/yamcs.bootstrap.yaml": "29e52233595bda771964ccce13ce1d74c39a6d2af06fe31d73472a0127104574",
+    "profiles/sdls/toolchain-amd64-nos3.cmake": "95d7df4a9b203462cd7e5fb4bd4cfd9058063380ed858a05784501d5d3394fc2",
+    "scripts/lab-mode/patches/42-send.patch": "0df6dd3fffa106688c8a6582b67e7933a9a17d859d9ae43bffdeffb6e3924b05",
+    "scripts/lab-mode/patches/lab42_socket.h": "339eca7058b89e78d07fec6e21330b7e8a6d394352ff1dd284e0c1c24ee337d7"
+  },
+  "fortytwo": {
+    "revision": "4ab84220157201e03de415aad16e58cf59133eb1",
+    "path": "Source/AutoCode/TxRxIPC.c",
+    "base": "9aff2de7cbf9fe1ee4889a5c713b88fbd43e736ef9b43a94244e8999c1d2d8c4",
+    "patched": "aa17fd625cd5afcf3d3ced54e64436857a61fa1cf700c00c381810c44bd66be1",
+    "patch": "patches/42-send.patch",
+    "header": "patches/lab42_socket.h",
+    "header_target": "Include/lab42_socket.h"
+  }
+}

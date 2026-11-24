@@ -1,0 +1,40 @@
+diff --git a/fsw/src/services/tm_sdlp.c b/fsw/src/services/tm_sdlp.c
+--- a/fsw/src/services/tm_sdlp.c
++++ b/fsw/src/services/tm_sdlp.c
+@@ -144,6 +144,7 @@
+         dataFieldOffset += secHdrLength + 1;
+     }
+ 
++#ifndef LAB_CLEAR_MODE
+     // Need SA information for security parameter lengths
+     // Query SA DB for active SA / SDLS parameters
+     if (sa_if == NULL) // This should not happen, but tested here for safety
+@@ -173,9 +174,11 @@
+         dataFieldOffset += sdlsSecurityHeaderLength;
+     }
+ 
++#endif /* LAB_CLEAR_MODE */
+     // Reduce available field length based on cumulative offset
+     dataFieldLength -= dataFieldOffset;
+ 
++#ifndef LAB_CLEAR_MODE
+     // IF using SDLS
+     if (1)
+     {
+@@ -183,6 +186,7 @@
+         dataFieldLength -= sdlsSecurityTrailerLength;
+     }
+ 
++#endif /* LAB_CLEAR_MODE */
+     if (pChannelConfig->ocfFlag == true)
+     {
+         dataFieldLength -= TMTF_OCF_LENGTH;
+@@ -193,7 +197,7 @@
+         dataFieldLength -= TMTF_ERR_CTRL_FIELD_LENGTH;
+     }
+ 
+-#ifdef TM_DEBUG
++#if defined(TM_DEBUG) && !defined(LAB_CLEAR_MODE)
+     printf("TM_SDLP Initializing channel:\n");
+     printf("\t Primary header length: \t%d\n", TMTF_PRIHDR_LENGTH);
+     printf("\t Secondary header length: \t%d\n", secHdrLength);

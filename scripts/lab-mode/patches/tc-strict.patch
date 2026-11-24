@@ -1,0 +1,18 @@
+diff --git a/src/core/crypto_tc.c b/src/core/crypto_tc.c
+--- a/src/core/crypto_tc.c
++++ b/src/core/crypto_tc.c
+@@ -1818,6 +1818,14 @@
+ {
+     uint32_t status = CRYPTO_LIB_SUCCESS;
+ 
++#ifdef LAB_SDLS_MODE
++    /* Lab profile: require the authenticated/encrypted TC association. */
++    if (tc_sdls_processed_frame->tc_sec_header.spi != 4)
++    {
++        return CRYPTO_LIB_ERR_SA_NOT_OPERATIONAL;
++    }
++#endif
++
+     status = sa_if->sa_get_from_spi(tc_sdls_processed_frame->tc_sec_header.spi, sa_ptr);
+     // If no valid SPI, return
+     if (status == CRYPTO_LIB_SUCCESS)

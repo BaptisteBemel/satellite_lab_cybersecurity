@@ -1,45 +1,34 @@
-# Vagrant files
+# Vagrant, mode state and local build inputs
 .vagrant/
-*.log
+.lab-mode/
+/provision/mc/*.bundle
+/profiles/sdls/*.bundle
+/nos3-components.tar.gz.*
+
+# Captures, extracted packets and local databases
+captures/*
+!captures/.gitkeep
+extracted_*/
 *.pcap
 *.pcapng
+*.cap
+*.bin
 *.db
 *.sqlite
 *.rdb
-__pycache__/
+
+# Local credentials, logs and archives
 .env
 *.key
 *.pem
+*.log
 *.tar
 *.tar.gz
 *.zip
 
-# Generated packet captures
-captures/*
-!captures/.gitkeep
-
-# Extracted/generated telemetry and telecommand outputs
-extracted_tm/
-extracted_tc/
-extracted_*/
-**/extracted_*/
-
-# Packet capture files
-*.pcap
-*.pcapng
-*.cap
-
-# Generated binary payloads
-*.bin
-
-# Large local archives
-nos3-components.tar.gz
-
-# Python cache
+# Python
 __pycache__/
 *.pyc
-
-# Local virtual environments
 venv/
 .venv/
 yamcs-venv/

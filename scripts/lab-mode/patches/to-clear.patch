@@ -1,0 +1,19 @@
+diff --git a/fsw/examples/udp_tf/to_custom.c b/fsw/examples/udp_tf/to_custom.c
+--- a/fsw/examples/udp_tf/to_custom.c
++++ b/fsw/examples/udp_tf/to_custom.c
+@@ -346,6 +346,7 @@
+         goto end_of_function;
+     }
+ 
++#ifndef LAB_CLEAR_MODE
+     /* Perform SDLS */
+     iStatus = Crypto_TM_ApplySecurity((uint8_t*)pFrameInfo->frame, 1786);
+     if (iStatus != TO_SUCCESS)
+@@ -353,6 +354,7 @@
+         goto end_of_function;
+     }
+ 
++#endif /* LAB_CLEAR_MODE */
+     /* Synchronize frame into CADU */ 
+     iCaduSize = TM_SYNC_Synchronize(pChnl->buffer, (char*) TM_SYNC_ASM_STR, 
+                                     (uint8_t) TM_SYNC_ASM_SIZE,

@@ -1,0 +1,40 @@
+diff --git a/cfg/nos3_defs/toolchain-amd64-nos3.cmake b/cfg/nos3_defs/toolchain-amd64-nos3.cmake
+index ae56984..fc49c0c 100644
+--- a/cfg/nos3_defs/toolchain-amd64-nos3.cmake
++++ b/cfg/nos3_defs/toolchain-amd64-nos3.cmake
+@@ -30,8 +30,10 @@ add_definitions(-DBYTE_ORDER_LE)
+ add_definitions(-D_LINUX_OS_)
+ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+ 
+-#set(CI_TRANSPORT udp_tf)
+ # Clear CCSDS TC Transfer Frames over UDP.
+ # This profile decapsulates TCTFs with IO_LIB without applying SDLS/CryptoLib.
+-set(CI_TRANSPORT udp_tf_clear)
++#set(CI_TRANSPORT udp_tf_clear)
++# Native TC receiver using CryptoLib for SDLS processing.
++# The clear baseline uses CI_TRANSPORT=udp_tf_clear.
++set(CI_TRANSPORT udp_tf)
+ set(TO_TRANSPORT udp_tf) # Note udp_tf used for Transfer Frames required for CryptoLib
+diff --git a/scripts/headless_launch.sh b/scripts/headless_launch.sh
+index 97f27ac..d05bc31 100755
+--- a/scripts/headless_launch.sh
++++ b/scripts/headless_launch.sh
+@@ -58,12 +58,18 @@ echo ""
+   
+ # Flight Software  
+ echo "Flight Software..."  
++
++# Prepare the private key directory, including for a clear-only installation.
++mkdir -p /home/vagrant/sdls-secrets
++chmod 700 /home/vagrant/sdls-secrets
++
+ docker run -dit \
+   -v /etc/passwd:/etc/passwd:ro \
+   -v /etc/group:/etc/group:ro \
+   -u "$NOS3_UID:$NOS3_GID" \
+   -e TERM=xterm \
+   -v $BASE_DIR:$BASE_DIR \
++  -v /home/vagrant/sdls-secrets:/home/vagrant/sdls-secrets:ro \
+   --name $SC_NUM"_nos_fsw" \
+   -h nos-fsw \
+   --network=$SC_NETNAME \

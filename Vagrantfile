@@ -219,9 +219,6 @@ EOF
         "https://github.com/BaptisteBemel/nos34yamcs_cli" \
         "/home/vagrant/nos3"
 
-      cd /home/vagrant/nos3
-      sudo -u vagrant -H git submodule update --init --recursive
-
       chown -R vagrant:vagrant /home/vagrant/nos3
     SHELL
 
@@ -366,16 +363,6 @@ EOF
       chown -R vagrant:vagrant /storage/yamcs-data
       chown -R vagrant:vagrant /home/vagrant/yamcs-nos3
 
-      # Build Yamcs backend once
-      if [ ! -f /home/vagrant/yamcs-nos3/.vagrant_maven_build_done ]; then
-        cd /home/vagrant/yamcs-nos3
-        sudo -u vagrant -H mvn clean install -DskipTests
-        sudo -u vagrant -H touch /home/vagrant/yamcs-nos3/.vagrant_maven_build_done
-      else
-        echo "Yamcs backend already built, skipping Maven build"
-      fi
-
-      chown -R vagrant:vagrant /home/vagrant/yamcs-nos3
     SHELL
 
     mc.vm.provision "shell",
@@ -408,16 +395,34 @@ EOF
 
       #{DNS_FIX}
 
-      # Wait for the GS gateway to be reachable
-      for i in $(seq 1 10); do
-        if ping -c 1 -W 1 #{GS_MC_IP} >/dev/null 2>&1; then
+      # NetworkManager owns eth1 and can discard an address set only with ip.
+      if command -v nmcli >/dev/null 2>&1 && systemctl is-active --quiet NetworkManager; then
+        if ! nmcli connection show id satlab-eth1 >/dev/null 2>&1; then
+          nmcli connection add type ethernet ifname eth1 con-name satlab-eth1 autoconnect no
+        fi
+        nmcli connection modify id satlab-eth1 \
+          connection.interface-name eth1 \
+          ipv4.method manual ipv4.addresses "#{KALI_IP}/24" \
+          ipv4.routes "192.168.20.0/24 #{GS_MC_IP}" ipv4.never-default yes \
+          ipv6.method ignore connection.autoconnect yes
+        nmcli connection up id satlab-eth1 ifname eth1
+      else
+        ip link set dev eth1 up
+        ip address replace #{KALI_IP}/24 dev eth1
+        ip route replace 192.168.20.0/24 via #{GS_MC_IP} dev eth1
+      fi
+
+      # GS may be offline when Kali is provisioned on its own.
+      for attempt in $(seq 1 10); do
+        if ping -I eth1 -c 1 -W 1 #{GS_MC_IP} >/dev/null 2>&1; then
           break
         fi
-        echo "Waiting for GS gateway (#{GS_MC_IP})... ($i/10)"
-        sleep 2
+        if [ "$attempt" -eq 10 ]; then
+          echo "WARNING: GS (#{GS_MC_IP}) did not reply on eth1." >&2
+        else
+          sleep 2
+        fi
       done
-
-      ip route replace 192.168.20.0/24 via #{GS_MC_IP}
 
       echo "Kali routing table"
       ip route
@@ -439,45 +444,5 @@ EOF
         nmap \
         netcat-openbsd
     SHELL
-
-
-      # Persist Kali lab network with NetworkManager.
-  # Direct "ip addr add" works manually, but Kali/NetworkManager may remove it
-  # during boot/provisioning. This creates a persistent NM profile for eth1.
-  kali.vm.provision "shell", run: "always", privileged: true, inline: <<-SHELL
-    set -e
-
-    echo "Persisting Kali lab network on eth1"
-
-    if command -v nmcli >/dev/null 2>&1; then
-      nmcli connection delete satlab-eth1 >/dev/null 2>&1 || true
-
-      nmcli connection add \
-        type ethernet \
-        ifname eth1 \
-        con-name satlab-eth1 \
-        ipv4.method manual \
-        ipv4.addresses 192.168.10.40/24 \
-        ipv4.never-default yes \
-        ipv6.method ignore \
-        connection.autoconnect yes
-
-      nmcli connection modify satlab-eth1 \
-        +ipv4.routes "192.168.20.0/24 192.168.10.30"
-
-      nmcli connection up satlab-eth1
-    else
-      ip link set eth1 up
-      ip addr flush dev eth1
-      ip addr add 192.168.10.40/24 dev eth1
-      ip route replace 192.168.20.0/24 via 192.168.10.30 dev eth1
-    fi
-
-    echo "Final Kali addresses"
-    ip -br addr
-
-    echo "Final Kali routing table"
-    ip route
-  SHELL
   end
 end
